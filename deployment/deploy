@@ -29,5 +29,11 @@ if ! [ -z "$ENV" ]; then
     set image deployment/floq \
     --namespace="floq-blank-${ENV}" \
     "floq=$IMAGE_NAME:$TAG"
+  
+  if [ "$ENV" = "prod" ]; then
+    "$HOME/google-cloud-sdk/bin/kubectl" \
+      set image deployment/floq \
+      --namespace="floq-folq-${ENV}" \
+      "floq=$IMAGE_NAME:$TAG"
+  fi
 fi
-
