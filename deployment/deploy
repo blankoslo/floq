@@ -5,13 +5,15 @@ set -x
 
 unset ENV;
 
-if [ "$TRAVIS_PULL_REQUEST" == false ]; then
-  if [ "$TRAVIS_BRANCH" == "develop" ] || [ "$TRAVIS_BRANCH" == "feature/travis-support" ]; then
-    ENV=test;
-  elif [ "$TRAVIS_BRANCH" == "master" ]; then
-    ENV=prod;
-  fi
-fi
+# TODO revert back before merge
+# if [ "$TRAVIS_PULL_REQUEST" == false ]; then
+#  if [ "$TRAVIS_BRANCH" == "develop" ] || [ "$TRAVIS_BRANCH" == "feature/travis-support" ]; then
+#    ENV=test;
+#  elif [ "$TRAVIS_BRANCH" == "master" ]; then
+#    ENV=prod;
+#  fi
+#fi
+ENV=test;
 
 export GOOGLE_APPLICATION_CREDENTIALS="${PWD}/client-secret.json";
 export PATH=${HOME}/google-cloud-sdk/bin:$PATH

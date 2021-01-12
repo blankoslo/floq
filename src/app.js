@@ -108,6 +108,8 @@ app.post('/login', (req, res) => {
         );
 });
 
+app.post('/oauth2', (req, res) => auth.handleOAuth2Callback(req, res));
+
 /* PRIVATE PATHS */
 app.use(auth.requiresLogin);
 

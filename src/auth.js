@@ -1,12 +1,13 @@
 var Promise = require('promise/lib/es6-extensions');
-var GoogleAuth = require('google-auth-library');
+var { OAuth2Client } = require('google-auth-library');
 var common = require('common');
-var ga = new GoogleAuth();
-var jwtClient = new ga.JWTClient();
+const url = require('url');
 
-var aud = '1085640931155-0f6l02jv973og8mi4nb124k6qlrh470p.apps.googleusercontent.com';
-var acceptedEmailDomains =
-  (process.env.FLOQ_ACCEPTED_EMAIL_DOMAINS || 'blank.no').split(",");
+const aud = '1085640931155-0f6l02jv973og8mi4nb124k6qlrh470p.apps.googleusercontent.com';
+const acceptedEmailDomains = (process.env.FLOQ_ACCEPTED_EMAIL_DOMAINS || 'blank.no').split(",");
+
+const CLIENT_ID = '1085640931155-0eei92m60ngndmrpiktqsaav155f9jer.apps.googleusercontent.com';
+const CLIENT_SECRET = 'ieE3Iykw4DPk3JuBmnJdcAmR'; // only a temp one for testing
 
 const TOKEN_BUFFER_SECONDS = 3600 * 12;
 
@@ -65,7 +66,7 @@ function authenticateGoogleIdToken(token) {
             }
 
             if (payload.iss !== 'accounts.google.com'
-                    && payload.iss !== 'https://accounts.google.com') {
+                && payload.iss !== 'https://accounts.google.com') {
                 reject('Wrong issuer.');
                 return;
             }
@@ -77,13 +78,34 @@ function authenticateGoogleIdToken(token) {
 
             resolve(payload);
         }
-
-        jwtClient.verifyIdToken(token, aud, callback);
+        var ga = new GoogleAuth();
+        new ga.JWTClient().verifyIdToken(token, aud, callback);
     });
+}
+
+async function handleOAuth2Callback(req, res) {
+    const oAuth2Client = new OAuth2Client(
+        CLIENT_ID,
+        CLIENT_SECRET,
+        'https://blank-test.floq.no/oauth2',
+    );
+
+    const code = url.parse(req.url, true).query.code;
+    if (!code) {
+        res.status(400).send('Missing param code');
+        return;
+    }
+
+    const r = await oAuth2Client.getToken(code);
+
+    console.log(JSON.stringify(r));
+    
+    res.redirect('login?to=' + req.originalUrl);
 }
 
 module.exports = {
     requiresLogin,
     validRedirect,
-    authenticateGoogleIdToken
+    authenticateGoogleIdToken,
+    handleOAuth2Callback
 };

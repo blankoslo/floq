@@ -14,7 +14,7 @@
     "common": "blankoslo/node-common#master",
     "express": "^4.13.3",
     "express-session": "^1.12.1",
-    "google-auth-library": "^0.12.0",
+    "google-auth-library": "^6.1.3",
     "helmet": "^1.3.0",
     "jade": "^1.11.0",
     "node-fetch": "^2.6.1",
