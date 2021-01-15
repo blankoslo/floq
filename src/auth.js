@@ -1,15 +1,27 @@
-var Promise = require('promise/lib/es6-extensions');
-var { OAuth2Client } = require('google-auth-library');
-var common = require('common');
+const crypto = require('crypto');
 const url = require('url');
 
-const aud = '1085640931155-0f6l02jv973og8mi4nb124k6qlrh470p.apps.googleusercontent.com';
-const acceptedEmailDomains = (process.env.FLOQ_ACCEPTED_EMAIL_DOMAINS || 'blank.no').split(",");
+var common = require('common');
 
-const CLIENT_ID = '1085640931155-0eei92m60ngndmrpiktqsaav155f9jer.apps.googleusercontent.com';
-const CLIENT_SECRET = 'ieE3Iykw4DPk3JuBmnJdcAmR'; // only a temp one for testing
+const Promise = require('promise/lib/es6-extensions');
+const { auth, OAuth2Client } = require('google-auth-library');
+
+const clientSecret = require('../client-secret.json');
+
+const JWT_AUD = '1085640931155-0f6l02jv973og8mi4nb124k6qlrh470p.apps.googleusercontent.com';
+
+const OAUTH_CLIENT_ID = process.env.GOOGLE_AUTH_CLIENT_ID;
+const OAUTH_CLIENT_SECRET = process.env.GOOGLE_AUTH_CLIENT_SECRET;
+const OAUTH_REDIRECT_URI = process.env.GOOGLE_AUTH_REDIRECT_URI;
+const OATH_STATE_TTL = 1000 * 60 * 10; // 10 minutes in ms
+
+const ACCEPTED_EMAIL_DOMAINS = (process.env.FLOQ_ACCEPTED_EMAIL_DOMAINS || 'blank.no').split(",");
 
 const TOKEN_BUFFER_SECONDS = 3600 * 12;
+
+const authRequestState = {};
+
+const jwtClient = auth.fromJSON(clientSecret);
 
 function requiresLogin(req, res, next) {
     // TODO: Check if valid employee loaded.
@@ -45,9 +57,13 @@ function validRedirect(app, path) {
     return false;
 }
 
-function authenticateGoogleIdToken(token) {
+function authenticateGoogleIdToken(idToken) {
+    return authenticateGoogleIdTokenWithClient(idToken, JWT_AUD, jwtClient);
+}
+
+function authenticateGoogleIdTokenWithClient(idToken, clientId, authClient) {
     return new Promise((resolve, reject) => {
-        if (!token) {
+        if (!idToken) {
             reject('No token');
             return;
         }
@@ -59,53 +75,115 @@ function authenticateGoogleIdToken(token) {
             }
 
             var payload = data.getPayload();
+            console.log(`Payload ${JSON.stringify(payload)}`);
 
-            if (payload.aud !== aud) {
+            if (payload.aud !== clientId) {
                 reject('Unrecognized client.');
                 return;
             }
 
             if (payload.iss !== 'accounts.google.com'
-                && payload.iss !== 'https://accounts.google.com') {
+                    && payload.iss !== 'https://accounts.google.com') {
                 reject('Wrong issuer.');
                 return;
             }
 
-            if (acceptedEmailDomains.indexOf(payload.hd) === -1) {
+            if (ACCEPTED_EMAIL_DOMAINS.indexOf(payload.hd) === -1) {
                 reject('Wrong hosted domain: ' + payload.hd);
                 return;
             }
 
             resolve(payload);
         }
-        var ga = new GoogleAuth();
-        new ga.JWTClient().verifyIdToken(token, aud, callback);
+        authClient.verifyIdToken({idToken}, callback);
     });
 }
 
-async function handleOAuth2Callback(req, res) {
+async function authenticateWithGoogleAuth(req, res) {
     const oAuth2Client = new OAuth2Client(
-        CLIENT_ID,
-        CLIENT_SECRET,
-        'https://blank-test.floq.no/oauth2',
+        OAUTH_CLIENT_ID,
+        OAUTH_CLIENT_SECRET,
+        OAUTH_REDIRECT_URI,
     );
 
-    const code = url.parse(req.url, true).query.code;
-    if (!code) {
-        res.status(400).send('Missing param code');
+    const state = crypto.randomBytes(20).toString('hex');
+    authRequestState[state] = { to: req.query.to, created: Date.now() };
+
+    const authorizeUrl = oAuth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+        state,
+        prompt: 'consent',
+    });
+    res.redirect(authorizeUrl);
+}
+
+async function handleGoogleAuthCallback(req, res) {
+    const reqCode = req.query.code;
+    if (!reqCode) {
+        res.status(400).text('Missing required code parameter in Google Auth callback');
         return;
     }
 
-    const r = await oAuth2Client.getToken(code);
+    const state = loadAuthRequestStateOrSetResponse(req, res);
+    clearLongOverdueStates();
+    if (!state) {
+        return;
+    }
 
-    console.log(JSON.stringify(r));
+    const oAuth2Client = new OAuth2Client(
+        OAUTH_CLIENT_ID,
+        OAUTH_CLIENT_SECRET,
+        OAUTH_REDIRECT_URI,
+    );
+    const tokenRes = await oAuth2Client.getToken(reqCode);
+    console.log(`Tokens ${JSON.stringify(tokenRes)}`); // TODO remove log
+
+    const data = await authenticateGoogleIdTokenWithClient(tokenRes.tokens.id_token, OAUTH_CLIENT_ID, oAuth2Client);
     
-    res.redirect('login?to=' + req.originalUrl);
+    const apiToken = common.auth.signAPIAccessToken({
+        role: process.env.API_ROLE || 'employee',
+        // TODO: Should fetch employee ID instead.
+        email: data.email
+    });
+
+    res.redirect(`${state.to}?access_token=${apiToken}&refresh_token=${tokenRes.tokens.refresh_token}`);
+}
+
+function loadAuthRequestStateOrSetResponse(req, res) {
+    const reqState = req.query.state;
+    if (!reqState) {
+        res.status(400).text('Missing required state parameter in Google Auth callback');
+        return null;
+    }
+    const cachedState = authRequestState[reqState];
+    if (!cachedState) {
+        res.status(400).text('Unknown value in state parameter');
+        return null;
+    }
+    delete authRequestState[reqState];
+    if (Date.now() - cachedState.created > OATH_STATE_TTL) {
+        res.status(400).text(`State has expired, please complete authentication within ${OATH_STATE_TTL / 1000 / 60} minutes`);
+        return null;
+    }
+    return cachedState;
+}
+
+/**
+ * Removes abandoned auth request states
+ */
+function clearLongOverdueStates() {
+    for (const key in authRequestState) {
+        if (Date.now() - authRequestState[key].created > OATH_STATE_TTL * 10) {
+            delete authRequestState[key];
+        }
+    }
 }
 
 module.exports = {
     requiresLogin,
     validRedirect,
     authenticateGoogleIdToken,
-    handleOAuth2Callback
+    authenticateWithGoogleAuth,
+    handleGoogleAuthCallback,
 };

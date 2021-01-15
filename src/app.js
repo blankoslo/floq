@@ -108,7 +108,8 @@ app.post('/login', (req, res) => {
         );
 });
 
-app.post('/oauth2', (req, res) => auth.handleOAuth2Callback(req, res));
+app.get('login/oauth', (req, res) => auth.authenticateWithGoogleAuth(req, res));
+app.get('login/oauth/callback', (req, res) => auth.handleGoogleAuthCallback(req, res))
 
 /* PRIVATE PATHS */
 app.use(auth.requiresLogin);

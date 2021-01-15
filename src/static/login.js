@@ -2,7 +2,7 @@ function onSuccess(googleUser) {
     // POST session to backend, which does the redirect.
     var form = document.createElement('form');
     form.setAttribute('method', 'POST');
-    form.setAttribute('action', '/oauth2?to=' + escape(document.getElementById("targetLocation").content));
+    form.setAttribute('action', '/login?to=' + escape(document.getElementById("targetLocation").content));
 
     var token_field = document.createElement('input');
     token_field.setAttribute('type', 'hidden');
