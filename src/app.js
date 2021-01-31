@@ -80,35 +80,12 @@ app.use(bodyParser.urlencoded({
 
 /* PUBLIC PATHS */
 app.get('/login', (req, res) => {
-    res.render('login', {
-        to: req.query.to
-    });
+    if (!req.query.to) {
+        return auth.authenticateWithGoogleAuth(res, '/', true);
+    }
+    return auth.authenticateWithGoogleAuth(res, req.query.to, true);
 });
-
-app.post('/login', (req, res) => {
-    auth.authenticateGoogleIdToken(req.body.id_token)
-        .then(
-            (data) => {
-                req.session.apiToken = common.auth.signAPIAccessToken({
-                    role: process.env.API_ROLE || 'employee',
-                    // TODO: Should fetch employee ID instead.
-                    email: data.email
-                });
-
-                req.session.email = data.email;
-
-                // TODO: Supplying google id_token too for now, until all apps
-                // are changed over.
-                req.session.id_token = req.body.id_token;
-                res.redirect(
-                    auth.validRedirect(app, req.query.to) ? req.query.to : '/'
-                );
-            },
-            (err) => res.status(401).send(err)
-        );
-});
-
-app.get('/login/oauth', (req, res) => auth.authenticateWithGoogleAuth(req, res));
+app.get('/login/oauth', (req, res) => auth.authenticateWithGoogleAuth(res, req.query.to, false));
 app.get('/login/oauth/callback', (req, res) => auth.handleGoogleAuthCallback(req, res))
 
 /* PRIVATE PATHS */
