@@ -1,6 +1,5 @@
 const crypto = require('crypto');
-
-var common = require('common');
+const common = require('common');
 
 const Promise = require('promise/lib/es6-extensions');
 const { OAuth2Client } = require('google-auth-library');
