@@ -14,6 +14,8 @@ const OAUTH_CLIENT_ID = process.env.GOOGLE_AUTH_CLIENT_ID;
 const OAUTH_CLIENT_SECRET = process.env.GOOGLE_AUTH_CLIENT_SECRET;
 const OAUTH_REDIRECT_URI = process.env.GOOGLE_AUTH_REDIRECT_URI;
 const OATH_STATE_TTL = 1000 * 60 * 10; // 10 minutes in ms
+// more client URIs can be added when needed
+const OAUTH_CLIENT_REDIRECT_URI_REGEX = /^https?:\/\/)?(localhost)(:[0-9]+)?(\/.*)?$/; // any localhost address
 
 const ACCEPTED_EMAIL_DOMAINS = (process.env.FLOQ_ACCEPTED_EMAIL_DOMAINS || 'blank.no').split(",");
 
@@ -100,6 +102,11 @@ function authenticateGoogleIdTokenWithClient(idToken, clientId, authClient) {
 }
 
 async function authenticateWithGoogleAuth(req, res) {
+    if (!req.query.to || !OAUTH_CLIENT_REDIRECT_URI_REGEX.test(req.query.to)) {
+        res.status(400).text('Value of query parameter "to" is invalid');
+        return;
+    }
+
     const oAuth2Client = new OAuth2Client(
         OAUTH_CLIENT_ID,
         OAUTH_CLIENT_SECRET,
