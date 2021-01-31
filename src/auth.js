@@ -209,10 +209,16 @@ async function refreshAccessToken(req, res) {
     return;
 }
 
+function logout(req, res) {
+    req.session.destroy();
+    res.status(200).send('See ya! 👋');
+}
+
 module.exports = {
     requiresLogin,
     validRedirect,
     authenticateWithGoogleAuth,
     handleGoogleAuthCallback,
     refreshAccessToken,
+    logout,
 };
