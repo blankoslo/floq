@@ -14,8 +14,10 @@ const OAUTH_CLIENT_ID = process.env.GOOGLE_AUTH_CLIENT_ID;
 const OAUTH_CLIENT_SECRET = process.env.GOOGLE_AUTH_CLIENT_SECRET;
 const OAUTH_REDIRECT_URI = process.env.GOOGLE_AUTH_REDIRECT_URI;
 const OATH_STATE_TTL = 1000 * 60 * 10; // 10 minutes in ms
-// more client URIs can be added when needed
-const OAUTH_CLIENT_REDIRECT_URI_REGEX = /^https?:\/\/)?(localhost)(:[0-9]+)?(\/.*)?$/; // any localhost address
+// more valid client URIs can be added when needed
+const OAUTH_CLIENT_REDIRECT_URIS_REGEX = [
+    /(^https?:\/\/)?(localhost)(:[0-9]+)?(\/.*)?$/, // any localhost address
+];
 
 const ACCEPTED_EMAIL_DOMAINS = (process.env.FLOQ_ACCEPTED_EMAIL_DOMAINS || 'blank.no').split(",");
 
@@ -102,8 +104,8 @@ function authenticateGoogleIdTokenWithClient(idToken, clientId, authClient) {
 }
 
 async function authenticateWithGoogleAuth(req, res) {
-    if (!req.query.to || !OAUTH_CLIENT_REDIRECT_URI_REGEX.test(req.query.to)) {
-        res.status(400).text('Value of query parameter "to" is invalid');
+    if (!req.query.to || !OAUTH_CLIENT_REDIRECT_URIS_REGEX.find(regex => regex.test(req.query.to))) {
+        res.status(400).send('Value of query parameter "to" is invalid');
         return;
     }
 
@@ -128,7 +130,7 @@ async function authenticateWithGoogleAuth(req, res) {
 async function handleGoogleAuthCallback(req, res) {
     const reqCode = req.query.code;
     if (!reqCode) {
-        res.status(400).text('Missing required code parameter in Google Auth callback');
+        res.status(400).send('Missing required code parameter in Google Auth callback');
         return;
     }
 
@@ -160,17 +162,17 @@ async function handleGoogleAuthCallback(req, res) {
 function loadAuthRequestStateOrSetResponse(req, res) {
     const reqState = req.query.state;
     if (!reqState) {
-        res.status(400).text('Missing required state parameter in Google Auth callback');
+        res.status(400).send('Missing required state parameter in Google Auth callback');
         return null;
     }
     const cachedState = authRequestState[reqState];
     if (!cachedState) {
-        res.status(400).text('Unknown value in state parameter');
+        res.status(400).send('Unknown value in state parameter');
         return null;
     }
     delete authRequestState[reqState];
     if (Date.now() - cachedState.created > OATH_STATE_TTL) {
-        res.status(400).text(`State has expired, please complete authentication within ${OATH_STATE_TTL / 1000 / 60} minutes`);
+        res.status(400).send(`State has expired, please complete authentication within ${OATH_STATE_TTL / 1000 / 60} minutes`);
         return null;
     }
     return cachedState;
