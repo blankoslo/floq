@@ -22,6 +22,14 @@ const TOKEN_BUFFER_SECONDS = 3600 * 12;
 
 const authRequestState = {};
 
+function newOauthClient() {
+    return new OAuth2Client(
+        OAUTH_CLIENT_ID,
+        OAUTH_CLIENT_SECRET,
+        OAUTH_REDIRECT_URI
+    );
+}
+
 function requiresLogin(req, res, next) {
     // TODO: Check if valid employee loaded.
     if (req.session.apiToken) {
@@ -65,11 +73,7 @@ async function authenticateWithGoogleAuth(res, clientRedirect, saveSession) {
         return;
     }
 
-    const oAuth2Client = new OAuth2Client(
-        OAUTH_CLIENT_ID,
-        OAUTH_CLIENT_SECRET,
-        OAUTH_REDIRECT_URI,
-    );
+    const oAuth2Client = newOauthClient();
 
     const state = crypto.randomBytes(20).toString('hex');
     authRequestState[state] = { clientRedirect: clientRedirect, saveSession, created: Date.now() };
@@ -96,11 +100,7 @@ async function handleGoogleAuthCallback(req, res) {
         return;
     }
 
-    const oAuth2Client = new OAuth2Client(
-        OAUTH_CLIENT_ID,
-        OAUTH_CLIENT_SECRET,
-        OAUTH_REDIRECT_URI,
-    );
+    const oAuth2Client = newOauthClient();
     const tokenRes = await oAuth2Client.getToken(reqCode);
     console.log(`Tokens ${JSON.stringify(tokenRes)}`); // TODO remove log
 
@@ -192,9 +192,27 @@ function authenticateGoogleIdToken(idToken, authClient) {
     });
 }
 
+async function refreshAccessToken(req, res) {
+    const refresh_token = req.body.refresh_token;
+    if (!refresh_token) {
+        res.status(400).send('Missing field "refresh_token" in body');
+        return;
+    }
+
+    const oauthClient = newOauthClient();
+    oauthClient.setCredentials({
+        refresh_token,
+    })
+    const tokenRes = await oauthClient.getAccessToken();
+
+    res.status(200).send({access_token: tokenRes.token});
+    return;
+}
+
 module.exports = {
     requiresLogin,
     validRedirect,
     authenticateWithGoogleAuth,
     handleGoogleAuthCallback,
+    refreshAccessToken,
 };

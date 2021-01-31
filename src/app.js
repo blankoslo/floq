@@ -77,6 +77,7 @@ app.use(session({
 app.use(bodyParser.urlencoded({
     extended: false
 }));
+app.use(express.json());
 
 /* PUBLIC PATHS */
 app.get('/login', (req, res) => {
@@ -86,7 +87,8 @@ app.get('/login', (req, res) => {
     return auth.authenticateWithGoogleAuth(res, req.query.to, true);
 });
 app.get('/login/oauth', (req, res) => auth.authenticateWithGoogleAuth(res, req.query.to, false));
-app.get('/login/oauth/callback', (req, res) => auth.handleGoogleAuthCallback(req, res))
+app.get('/login/oauth/callback', (req, res) => auth.handleGoogleAuthCallback(req, res));
+app.post('/login/oauth/refresh', (req, res) => auth.refreshAccessToken(req, res));
 
 /* PRIVATE PATHS */
 app.use(auth.requiresLogin);
