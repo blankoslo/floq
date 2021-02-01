@@ -7,7 +7,7 @@ const { OAuth2Client } = require('google-auth-library');
 const OAUTH_CLIENT_ID = process.env.GOOGLE_AUTH_CLIENT_ID;
 const OAUTH_CLIENT_SECRET = process.env.GOOGLE_AUTH_CLIENT_SECRET;
 const OAUTH_REDIRECT_URI = process.env.GOOGLE_AUTH_REDIRECT_URI;
-const OATH_STATE_TTL = 1000 * 60 * 10; // 10 minutes in ms
+const OAUTH_STATE_TTL = 1000 * 60 * 10; // 10 minutes in ms
 // more valid client URIs can be added when needed
 const OAUTH_CLIENT_REDIRECT_URIS_REGEX = [
     /(^https:\/\/inni.blank.no)(\/.*)?$/,
@@ -69,7 +69,7 @@ async function authenticateWithGoogleAuth(res, clientRedirect, saveSession) {
     if (!clientRedirect.startsWith('/') && 
         (!clientRedirect || !OAUTH_CLIENT_REDIRECT_URIS_REGEX.find(regex => regex.test(clientRedirect)))
     ) {
-        res.status(400).send('Value of query parameter to is invalid');
+        res.status(400).send('Value of query parameter "to" is invalid');
         return;
     }
 
@@ -90,7 +90,7 @@ async function authenticateWithGoogleAuth(res, clientRedirect, saveSession) {
 async function handleGoogleAuthCallback(req, res) {
     const reqCode = req.query.code;
     if (!reqCode) {
-        res.status(400).send('Missing required code parameter in Google Auth callback');
+        res.status(400).send('Missing required "code" parameter in Google Auth callback');
         return;
     }
 
@@ -104,7 +104,11 @@ async function handleGoogleAuthCallback(req, res) {
     const tokenRes = await oAuth2Client.getToken(reqCode);
 
     const data = await authenticateGoogleIdToken(tokenRes.tokens.id_token, oAuth2Client);
-    
+    if (data.err) {
+        res.status(401).send(data.err);
+        return;
+    }
+
     const apiToken = common.auth.signAPIAccessToken({
         role: process.env.API_ROLE || 'employee',
         // TODO: Should fetch employee ID instead.
@@ -126,74 +130,62 @@ async function handleGoogleAuthCallback(req, res) {
 function loadAuthRequestStateOrSetResponse(req, res) {
     const reqState = req.query.state;
     if (!reqState) {
-        res.status(400).send('Missing required state parameter in Google Auth callback');
+        res.status(400).send('Missing required "state" parameter in Google Auth callback');
         return null;
     }
     const cachedState = authRequestState[reqState];
     if (!cachedState) {
-        res.status(400).send('Unknown value in state parameter');
+        res.status(400).send('Unknown value in "state" parameter');
         return null;
     }
     delete authRequestState[reqState];
-    if (Date.now() - cachedState.created > OATH_STATE_TTL) {
-        res.status(400).send(`State has expired, please complete authentication within ${OATH_STATE_TTL / 1000 / 60} minutes`);
+    if (Date.now() - cachedState.created > OAUTH_STATE_TTL) {
+        res.status(400).send(`State has expired, please complete authentication within ${OAUTH_STATE_TTL / 1000 / 60} minutes`);
         return null;
     }
     return cachedState;
 }
 
-/**
- * Removes abandoned auth request states
- */
+// Removes abandoned auth request states
 function clearLongOverdueStates() {
     for (const key in authRequestState) {
-        if (Date.now() - authRequestState[key].created > OATH_STATE_TTL * 10) {
+        if (Date.now() - authRequestState[key].created > OAUTH_STATE_TTL * 10) {
             delete authRequestState[key];
         }
     }
 }
 
-function authenticateGoogleIdToken(idToken, authClient) {
-    return new Promise((resolve, reject) => {
-        if (!idToken) {
-            reject('No token');
-            return;
-        }
+async function authenticateGoogleIdToken(idToken, authClient) {
+    if (!idToken) {
+        return { err: 'No token' };
+    }
 
-        var callback = (err, data) => {
-            if (err) {
-                reject(err);
-                return;
-            }
-
-            var payload = data.getPayload();
-
+    return authClient.verifyIdToken({idToken})
+        .then(login => {    
+            var payload = login.getPayload();
+    
             if (payload.aud !== OAUTH_CLIENT_ID) {
-                reject('Unrecognized client.');
-                return;
+                return { err: 'Unrecognized client' };
             }
-
+    
             if (payload.iss !== 'accounts.google.com'
                     && payload.iss !== 'https://accounts.google.com') {
-                reject('Wrong issuer.');
-                return;
+                return { err: 'Wrong issuer' };
             }
-
+    
             if (ACCEPTED_EMAIL_DOMAINS.indexOf(payload.hd) === -1) {
-                reject('Wrong hosted domain: ' + payload.hd);
-                return;
+                return { err: 'Wrong hosted domain: ' + (payload.hd || 'unknown') };
             }
-
-            resolve(payload);
-        }
-        authClient.verifyIdToken({idToken}, callback);
-    });
+    
+            return payload;
+        })
+        .catch(err => { err });
 }
 
 async function refreshAccessToken(req, res) {
     const refresh_token = req.body.refresh_token;
     if (!refresh_token) {
-        res.status(400).send('Missing required field refresh_token in body');
+        res.status(400).send('Missing required field "refresh_token" in body');
         return;
     }
 
