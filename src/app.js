@@ -80,13 +80,8 @@ app.use(bodyParser.urlencoded({
 app.use(express.json());
 
 /* PUBLIC PATHS */
-app.get('/login', (req, res) => {
-    if (!req.query.to) {
-        return auth.authenticateWithGoogleAuth(res, '/', true);
-    }
-    return auth.authenticateWithGoogleAuth(res, req.query.to, true);
-});
-app.get('/login/oauth', (req, res) => auth.authenticateWithGoogleAuth(res, req.query.to, false));
+app.get('/login', (req, res) =>  auth.authenticateWithGoogleAuthForLocalSystem(req, res,));
+app.get('/login/oauth', (req, res) => auth.authenticateWithGoogleAuthForExternalSystem(req, res));
 app.get('/login/oauth/callback', (req, res) => auth.handleGoogleAuthCallback(req, res));
 app.post('/login/oauth/refresh', (req, res) => auth.refreshAccessToken(req, res));
 app.get('/logout', (req, res) => auth.logout(req, res));

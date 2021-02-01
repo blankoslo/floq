@@ -64,11 +64,37 @@ function validRedirect(app, path) {
     return false;
 }
 
-async function authenticateWithGoogleAuth(res, clientRedirect, saveSession) {
-    // relative URLs and those matching certain domains are accepted
-    if (!clientRedirect.startsWith('/') && 
-        (!clientRedirect || !OAUTH_CLIENT_REDIRECT_URIS_REGEX.find(regex => regex.test(clientRedirect)))
-    ) {
+// Starts a OAuth authentication flow that saves credentials in session and redirects to a relative URL
+async function authenticateWithGoogleAuthForLocalSystem(req, res) {
+    var clientRedirect = req.query.to;
+    if (!clientRedirect) {
+        clientRedirect = '/';
+    } else if (!clientRedirect.startsWith('/')) {
+        res.status(400).send('Value of query parameter "to" is invalid, must be relative URL when logging in this way.');
+        return;
+    }
+
+    const oAuth2Client = newOauthClient();
+
+    const state = crypto.randomBytes(20).toString('hex');
+    authRequestState[state] = { clientRedirect: clientRedirect, local: true, created: Date.now() };
+
+    const authorizeUrl = oAuth2Client.generateAuthUrl({
+        access_type: 'online', // no refresh token is created
+        scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+        state,
+        prompt: 'consent',
+    });
+    res.redirect(authorizeUrl);
+}
+
+// Starts a OAuth authentication flow that sends credentials to an external system, saving nothing in session
+async function authenticateWithGoogleAuthForExternalSystem(req, res) {
+    const clientRedirect = req.query.to;
+    if (!clientRedirect) {
+        res.status(400).send('Required query parameter "to" is missing');
+    }
+    if (!clientRedirect || !OAUTH_CLIENT_REDIRECT_URIS_REGEX.find(regex => regex.test(clientRedirect))) {
         res.status(400).send('Value of query parameter "to" is invalid');
         return;
     }
@@ -76,10 +102,10 @@ async function authenticateWithGoogleAuth(res, clientRedirect, saveSession) {
     const oAuth2Client = newOauthClient();
 
     const state = crypto.randomBytes(20).toString('hex');
-    authRequestState[state] = { clientRedirect: clientRedirect, saveSession, created: Date.now() };
+    authRequestState[state] = { clientRedirect: clientRedirect, local: false, created: Date.now() };
 
     const authorizeUrl = oAuth2Client.generateAuthUrl({
-        access_type: 'offline',
+        access_type: 'offline', // creates a refresh token
         scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
         state,
         prompt: 'consent',
@@ -90,7 +116,7 @@ async function authenticateWithGoogleAuth(res, clientRedirect, saveSession) {
 async function handleGoogleAuthCallback(req, res) {
     const reqCode = req.query.code;
     if (!reqCode) {
-        res.status(400).send('Missing required "code" parameter in Google Auth callback');
+        res.status(400).send('Required "code" parameter in Google Auth callback is missing');
         return;
     }
 
@@ -115,7 +141,7 @@ async function handleGoogleAuthCallback(req, res) {
         email: data.email
     });
 
-    if (state.saveSession) {
+    if (state.local) {
         req.session.apiToken = apiToken;
         req.session.email = data.email;
         // TODO: Supplying google id_token too for now, until all apps are changed over.
@@ -130,12 +156,12 @@ async function handleGoogleAuthCallback(req, res) {
 function loadAuthRequestStateOrSetResponse(req, res) {
     const reqState = req.query.state;
     if (!reqState) {
-        res.status(400).send('Missing required "state" parameter in Google Auth callback');
+        res.status(400).send('Required "state" parameter in Google Auth callback is missing');
         return null;
     }
     const cachedState = authRequestState[reqState];
     if (!cachedState) {
-        res.status(400).send('Unknown value in "state" parameter');
+        res.status(400).send('Unrecognized value in "state" parameter');
         return null;
     }
     delete authRequestState[reqState];
@@ -207,7 +233,8 @@ function logout(req, res) {
 module.exports = {
     requiresLogin,
     validRedirect,
-    authenticateWithGoogleAuth,
+    authenticateWithGoogleAuthForLocalSystem,
+    authenticateWithGoogleAuthForExternalSystem,
     handleGoogleAuthCallback,
     refreshAccessToken,
     logout,
