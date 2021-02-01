@@ -9,10 +9,7 @@ const OAUTH_CLIENT_SECRET = process.env.GOOGLE_AUTH_CLIENT_SECRET;
 const OAUTH_REDIRECT_URI = process.env.GOOGLE_AUTH_REDIRECT_URI;
 const OAUTH_STATE_TTL = 1000 * 60 * 10; // 10 minutes in ms
 // more valid client URIs can be added when needed
-const OAUTH_CLIENT_REDIRECT_URIS_REGEX = [
-    /(^https:\/\/inni.blank.no)(\/.*)?$/,
-    /(^https:\/\/blank-test.floq.no)(\/.*)?$/,
-    /(^https:\/\/folq.floq.no)(\/.*)?$/,
+const OAUTH_EXTERNAL_REDIRECT_URIS_REGEX = [
     /(^https?:\/\/)(localhost)(:[0-9]+)?(\/.*)?$/,
 ];
 
@@ -94,7 +91,7 @@ async function authenticateWithGoogleAuthForExternalSystem(req, res) {
     if (!clientRedirect) {
         res.status(400).send('Required query parameter "to" is missing');
     }
-    if (!clientRedirect || !OAUTH_CLIENT_REDIRECT_URIS_REGEX.find(regex => regex.test(clientRedirect))) {
+    if (!clientRedirect || !OAUTH_EXTERNAL_REDIRECT_URIS_REGEX.find(regex => regex.test(clientRedirect))) {
         res.status(400).send('Value of query parameter "to" is invalid');
         return;
     }
