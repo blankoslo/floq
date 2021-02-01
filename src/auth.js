@@ -69,7 +69,7 @@ async function authenticateWithGoogleAuth(res, clientRedirect, saveSession) {
     if (!clientRedirect.startsWith('/') && 
         (!clientRedirect || !OAUTH_CLIENT_REDIRECT_URIS_REGEX.find(regex => regex.test(clientRedirect)))
     ) {
-        res.status(400).send('Value of query parameter "to" is invalid');
+        res.status(400).send('Value of query parameter to is invalid');
         return;
     }
 
@@ -102,7 +102,6 @@ async function handleGoogleAuthCallback(req, res) {
 
     const oAuth2Client = newOauthClient();
     const tokenRes = await oAuth2Client.getToken(reqCode);
-    console.log(`Tokens ${JSON.stringify(tokenRes)}`); // TODO remove log
 
     const data = await authenticateGoogleIdToken(tokenRes.tokens.id_token, oAuth2Client);
     
@@ -168,7 +167,6 @@ function authenticateGoogleIdToken(idToken, authClient) {
             }
 
             var payload = data.getPayload();
-            console.log(`Payload ${JSON.stringify(payload)}`);
 
             if (payload.aud !== OAUTH_CLIENT_ID) {
                 reject('Unrecognized client.');
@@ -195,7 +193,7 @@ function authenticateGoogleIdToken(idToken, authClient) {
 async function refreshAccessToken(req, res) {
     const refresh_token = req.body.refresh_token;
     if (!refresh_token) {
-        res.status(400).send('Missing field "refresh_token" in body');
+        res.status(400).send('Missing required field refresh_token in body');
         return;
     }
 
