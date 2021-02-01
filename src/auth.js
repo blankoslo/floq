@@ -123,30 +123,29 @@ async function handleGoogleAuthCallback(req, res) {
         return;
     }
 
-    const oAuth2Client = newOauthClient();
-    const tokenRes = await oAuth2Client.getToken(reqCode);
+    const oauthClient = newOauthClient();
+    const tokenRes = await oauthClient.getToken(reqCode);
 
-    const data = await authenticateGoogleIdToken(tokenRes.tokens.id_token, oAuth2Client);
+    const data = await authenticateGoogleIdToken(tokenRes.tokens.id_token, oauthClient);
     if (data.err) {
         res.status(401).send(data.err);
         return;
     }
 
-    const apiToken = common.auth.signAPIAccessToken({
-        role: process.env.API_ROLE || 'employee',
-        // TODO: Should fetch employee ID instead.
-        email: data.email
-    });
+    const accessToken = toSignedJWT(data);
 
     if (state.local) {
-        req.session.apiToken = apiToken;
+        req.session.apiToken = accessToken;
         req.session.email = data.email;
         // TODO: Supplying google id_token too for now, until all apps are changed over.
         req.session.id_token = req.body.id_token;
 
         res.redirect(state.clientRedirect);
     } else {
-        res.redirect(`${state.clientRedirect}?access_token=${apiToken}&refresh_token=${tokenRes.tokens.refresh_token}`);
+        const expiry_date = new Date(tokenRes.tokens.expiry_date);
+        expiry_date.setDate(expiry_date.getDate() + 7);
+
+        res.redirect(`${state.clientRedirect}?access_token=${accessToken}&expiry_date=${expiry_date.getTime()}&refresh_token=${tokenRes.tokens.refresh_token}`);
     }
 }
 
@@ -202,7 +201,17 @@ async function authenticateGoogleIdToken(idToken, authClient) {
     
             return payload;
         })
-        .catch(err => { err });
+        .catch(err => {
+            return { err };
+        });
+}
+
+function toSignedJWT(data) {
+    return common.auth.signAPIAccessToken({
+        role: process.env.API_ROLE || 'employee',
+        // TODO: Should fetch employee ID instead.
+        email: data.email
+    });
 }
 
 async function refreshAccessToken(req, res) {
@@ -217,8 +226,21 @@ async function refreshAccessToken(req, res) {
         refresh_token,
     })
     const tokenRes = await oauthClient.getAccessToken();
+    const expiry_date = tokenRes.res.data.expiry_date;
 
-    res.status(200).send({access_token: tokenRes.token});
+    const data = await authenticateGoogleIdToken(tokenRes.res.data.id_token, oauthClient);
+    if (data.err) {
+        res.status(401).send(data.err);
+        return;
+    }
+
+    const jwt_expiry_date = new Date(expiry_date);
+    jwt_expiry_date.setDate(jwt_expiry_date.getDate() + 7);
+
+    res.status(200).send({
+        access_token: toSignedJWT(data), 
+        expiry_date: jwt_expiry_date
+    });
     return;
 }
 
