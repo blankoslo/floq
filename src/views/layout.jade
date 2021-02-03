@@ -19,6 +19,10 @@ html(lang='en')
                         else
                             a.mdl-navigation__link(href='/#{app.short_name}', class='#{app.type}')=app.name
 
+                    span.separator
+                    a.mdl-navigation__link(href='/login', class='login') Bytt Bruker
+                    a.mdl-navigation__link(href='/logout', class='logout') Logg Ut
+
             main.mdl-layout__content
                 block content
 

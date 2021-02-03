@@ -77,36 +77,14 @@ app.use(session({
 app.use(bodyParser.urlencoded({
     extended: false
 }));
+app.use(express.json());
 
 /* PUBLIC PATHS */
-app.get('/login', (req, res) => {
-    res.render('login', {
-        to: req.query.to
-    });
-});
-
-app.post('/login', (req, res) => {
-    auth.authenticateGoogleIdToken(req.body.id_token)
-        .then(
-            (data) => {
-                req.session.apiToken = common.auth.signAPIAccessToken({
-                    role: process.env.API_ROLE || 'employee',
-                    // TODO: Should fetch employee ID instead.
-                    email: data.email
-                });
-
-                req.session.email = data.email;
-
-                // TODO: Supplying google id_token too for now, until all apps
-                // are changed over.
-                req.session.id_token = req.body.id_token;
-                res.redirect(
-                    auth.validRedirect(app, req.query.to) ? req.query.to : '/'
-                );
-            },
-            (err) => res.status(401).send(err)
-        );
-});
+app.get('/login', (req, res) =>  auth.authenticateWithGoogleAuthForLocalSystem(req, res,));
+app.get('/login/oauth', (req, res) => auth.authenticateWithGoogleAuthForExternalSystem(req, res));
+app.get('/login/oauth/callback', (req, res) => auth.handleGoogleAuthCallback(req, res));
+app.post('/login/oauth/refresh', (req, res) => auth.refreshAccessToken(req, res));
+app.get('/logout', (req, res) => auth.logout(req, res));
 
 /* PRIVATE PATHS */
 app.use(auth.requiresLogin);
