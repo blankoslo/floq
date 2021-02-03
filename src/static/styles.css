@@ -145,6 +145,10 @@ td.icon-cell {
 .mdl-layout__content {
   will-change: transform;
 }
+.separator {
+  height: 1px;
+  background-color: lightgrey;
+}
 
 header {
   background-color: #6600ff !important;
