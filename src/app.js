@@ -164,6 +164,12 @@ appRegs.forEach((appReg) => {
 
 });
 
+app.use(function(err, _req, res, _next) {
+    console.error(err);
+
+    res.status(500).send("An unhandled error occurred");
+});
+
 /* START SERVER */
 var server = app.listen(process.env.PORT || 3000, () => {
     var host = server.address().address;
