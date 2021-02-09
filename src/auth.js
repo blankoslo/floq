@@ -145,7 +145,7 @@ async function handleGoogleAuthCallback(req, res) {
         const expiry_date = new Date(tokenRes.tokens.expiry_date);
         expiry_date.setDate(expiry_date.getDate() + 7);
 
-        res.redirect(`${state.clientRedirect}?access_token=${accessToken}&expiry_date=${expiry_date.getTime()}&refresh_token=${tokenRes.tokens.refresh_token}`);
+        res.redirect(`${state.clientRedirect}?access_token=${accessToken}&expiry_date=${expiry_date}&refresh_token=${tokenRes.tokens.refresh_token}`);
     }
 }
 
