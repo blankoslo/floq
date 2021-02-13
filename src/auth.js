@@ -146,7 +146,7 @@ async function handleGoogleAuthCallback(req, res) {
         const expiry_date = new Date(tokenRes.tokens.expiry_date);
         expiry_date.setDate(expiry_date.getDate() + 7);
 
-        res.redirect(`${state.clientRedirect}?access_token=${accessToken}&expiry_date=${expiry_date.getTime()}&refresh_token=${tokenRes.tokens.refresh_token}`);
+        res.redirect(`${state.clientRedirect}?access_token=${accessToken}&expiry_date=${expiry_date.toISOString()}&refresh_token=${tokenRes.tokens.refresh_token}`);
     }
 }
 
@@ -240,7 +240,7 @@ async function refreshAccessToken(req, res) {
 
     res.status(200).send({
         access_token: toSignedJWT(data), 
-        expiry_date: jwt_expiry_date
+        expiry_date: jwt_expiry_date.toISOString(),
     });
     return;
 }
